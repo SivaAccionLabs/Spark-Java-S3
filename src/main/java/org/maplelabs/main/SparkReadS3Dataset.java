@@ -19,23 +19,24 @@ public class SparkReadS3Dataset {
     private static final Logger LOGGER = Logger.getLogger(SparkReadS3Dataset.class);
     public static void main(String[] args) throws SecurityException, IOException {
         if (args.length != 2) {
-	    LOGGER.error("Please provide the correct number of arguments...");
+            LOGGER.error("Please provide the correct number of arguments...");
             System.exit(1);
         }
         SparkSession spark = SparkSession.builder().appName("Spark_S3")
                                                    .config("fs.s3n.awsAccessKeyId", args[0])
                                                    .config("fs.s3n.awsSecretAccessKey", args[1])
                                                    .getOrCreate();
-        String gnrlPayPath = "s3n://maplelabs/maple/OP_DTL_GNRL_PAY.csv";
+        String awsContainer = "s3n://maplelabs/maple";
+        String gnrlPayPath = awsContainer + "/OP_DTL_GNRL_PAY.csv";
         String rsrchPayPath = "s3n://maplelabs/maple/OP_DTL_RSRCH_PAY.csv";
         try {
             LOGGER.info("Reading the csv file" + gnrlPayPath + "from S3 bucket");
-	    Dataset<Row> s3aRdd1 = spark.read().format("csv")
+            Dataset<Row> s3aRdd1 = spark.read().format("csv")
                                                .option("header", "true")
                                                .option("treatEmptyValuesAsNulls", "true")
-		                               .option("nullValue", "0")
-		                               .option("sep", ",")
-		                               .csv(gnrlPayPath);
+                                               .option("nullValue", "0")
+                                               .option("sep", ",")
+                                               .csv(gnrlPayPath);
 	    if (s3aRdd1.count() > 0) {
 	        LOGGER.info("Number of records in the given file is " + s3aRdd1.count());
 		s3aRdd1.createOrReplaceTempView("temp_table");
@@ -46,13 +47,18 @@ public class SparkReadS3Dataset {
                                 "Physician_Specialty,sum(Total_Amount_of_Payment_USDollars) as total_i" +
                                 "nvestment from gnrl_pay_orc group by Applicable_Manufacturer_or_Appli" +
                                 "cable_GPO_Making_Payment_Name,Physician_Specialty";
-		Dataset<Row> df1 = spark.sql(query1) ;
-		df1.show();
+                Dataset<Row> df1 = spark.sql(query1) ;
+                df1.show();
+                LOGGER.info("Writting the dataframe to the AWS S3");
+                df1.write().format("parquet").save(awsContainer + "/query1");
+                LOGGER.info("Computation completed for 1 query");
                 Dataset<Row> df2 = spark.sql(query2) ;
                 df2.show();
-		LOGGER.info("Done");
+                LOGGER.info("Writting the dataframe to the AWS S3");
+                df2.write().format("parquet").save(awsContainer + "/query2");
+                LOGGER.info("Computation completed for 2 queries");
 	    } else {
-		LOGGER.error("No records found in " + gnrlPayPath);
+                LOGGER.error("No records found in " + gnrlPayPath);
                 System.exit(1);
 	    }
             LOGGER.info("Reading the csv file" + rsrchPayPath + "from S3 bucket");
@@ -75,7 +81,9 @@ public class SparkReadS3Dataset {
                                 "cialty";
                 Dataset<Row> df3 = spark.sql(query3) ;
                 df3.show();
-                LOGGER.info("Done");
+                LOGGER.info("Writting dataframe to the AWS S3");
+                df3.write().format("parquet").save(awsContainer + "/query3");
+                LOGGER.info("Computation completed for 3 queries");
             } else {
                 LOGGER.error("No records found in " + rsrchPayPath);
                 System.exit(1);
